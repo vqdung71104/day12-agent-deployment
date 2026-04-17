@@ -46,18 +46,44 @@ Kết hợp TẤT CẢ những gì đã học trong 1 project hoàn chỉnh.
 # 1. Setup
 cp .env.example .env
 
-# 2. Chạy với Docker Compose
-docker compose up
+# 2. Chạy local production topology
+docker compose up --build --scale agent=3
 
-# 3. Test
+# 3. Test qua Nginx load balancer
 curl http://localhost/health
+curl http://localhost/ready
 
 # 4. Lấy API key từ .env, test endpoint
 API_KEY=$(grep AGENT_API_KEY .env | cut -d= -f2)
 curl -H "X-API-Key: $API_KEY" \
      -X POST http://localhost/ask \
      -H "Content-Type: application/json" \
-     -d '{"question": "What is deployment?"}'
+     -d '{"user_id": "user1", "question": "What is deployment?", "conversation_id": "user1"}'
+```
+
+`agent` không còn expose trực tiếp ra host. Toàn bộ traffic local đi qua `nginx` trên `http://localhost`, còn state được giữ trong Redis volume `redis-data`.
+
+## Environment Variables
+
+Current config contract:
+
+```env
+HOST=0.0.0.0
+PORT=8000
+ENVIRONMENT=development
+LOG_LEVEL=INFO
+APP_NAME=Production AI Agent
+APP_VERSION=1.0.0
+REDIS_URL=redis://localhost:6379/0
+AGENT_API_KEY=change-me-in-production
+RATE_LIMIT_PER_MINUTE=10
+MONTHLY_BUDGET_USD=10.0
+OPENROUTER_API_KEY=
+OPENROUTER_MODEL=google/gemini-2.5-flash-lite
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+CONVERSATION_TTL_SECONDS=86400
+MAX_HISTORY_MESSAGES=20
+ALLOWED_ORIGINS=http://localhost:3000
 ```
 
 ---
@@ -71,8 +97,9 @@ npm i -g @railway/cli
 # Login và deploy
 railway login
 railway init
-railway variables set OPENAI_API_KEY=sk-...
+railway variables set OPENROUTER_API_KEY=...
 railway variables set AGENT_API_KEY=your-secret-key
+railway variables set REDIS_URL=redis://...
 railway up
 
 # Nhận public URL!
@@ -86,7 +113,7 @@ railway domain
 1. Push repo lên GitHub
 2. Render Dashboard → New → Blueprint
 3. Connect repo → Render đọc `render.yaml`
-4. Set secrets: `OPENAI_API_KEY`, `AGENT_API_KEY`
+4. Set secrets: `OPENROUTER_API_KEY`, `AGENT_API_KEY`, `REDIS_URL`
 5. Deploy → Nhận URL!
 
 ---

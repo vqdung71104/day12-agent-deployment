@@ -1,21 +1,25 @@
-version: "3.9"
-
 services:
   agent:
     build: .
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8000
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      APP_NAME: ${APP_NAME:-Production AI Agent}
+      APP_VERSION: ${APP_VERSION:-1.0.0}
+      REDIS_URL: redis://redis:6379/0
+      AGENT_API_KEY: ${AGENT_API_KEY:-change-me-in-production}
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-10}
+      MONTHLY_BUDGET_USD: ${MONTHLY_BUDGET_USD:-10.0}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-google/gemini-2.5-flash-lite}
+      OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      CONVERSATION_TTL_SECONDS: ${CONVERSATION_TTL_SECONDS:-86400}
+      MAX_HISTORY_MESSAGES: ${MAX_HISTORY_MESSAGES:-20}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost}
     expose:
       - "8000"
-    environment:
-      - HOST=0.0.0.0
-      - PORT=8000
-      - ENVIRONMENT=production
-      - REDIS_URL=redis://redis:6379/0
-      - AGENT_API_KEY=${AGENT_API_KEY:-secret-key-123}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - RATE_LIMIT_PER_MINUTE=${RATE_LIMIT_PER_MINUTE:-10}
-      - MONTHLY_BUDGET_USD=${MONTHLY_BUDGET_USD:-10.0}
-    env_file:
-      - .env.local
     depends_on:
       redis:
         condition: service_healthy
@@ -30,7 +34,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
     volumes:
       - redis-data:/data
     healthcheck:
@@ -38,11 +42,13 @@ services:
       interval: 10s
       timeout: 3s
       retries: 3
+    restart: unless-stopped
 
   nginx:
     image: nginx:1.27-alpine
     depends_on:
-      - agent
+      agent:
+        condition: service_started
     ports:
       - "80:80"
     volumes:

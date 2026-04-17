@@ -1,33 +1,11 @@
-"""Application configuration loaded from environment variables."""
-from pydantic import Field, field_validator
+"""Production settings loaded from environment variables."""
+from __future__ import annotations
+
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    # Server
-    host: str = Field(default="0.0.0.0", alias="HOST")
-    port: int = Field(default=8000, alias="PORT")
-    environment: str = Field(default="development", alias="ENVIRONMENT")
-    log_level: str = Field(default="INFO", alias="LOG_LEVEL")
-
-    # Storage
-    redis_url: str = Field(default="redis://localhost:6379/0", alias="REDIS_URL")
-
-    # Security
-    agent_api_key: str = Field(default="secret-key-123", alias="AGENT_API_KEY")
-
-    # Reliability guards
-    rate_limit_per_minute: int = Field(default=10, alias="RATE_LIMIT_PER_MINUTE")
-    monthly_budget_usd: float = Field(default=10.0, alias="MONTHLY_BUDGET_USD")
-
-    # Chat behavior
-    max_history_turns: int = Field(default=20, alias="MAX_HISTORY_TURNS")
-    conversation_ttl_seconds: int = Field(default=604800, alias="CONVERSATION_TTL_SECONDS")
-    llm_model: str = Field(default="mock-llm-v1", alias="LLM_MODEL")
-
-    # CORS
-    allowed_origins: list[str] = Field(default_factory=lambda: ["*"], alias="ALLOWED_ORIGINS")
-
     model_config = SettingsConfigDict(
         env_file=(".env", ".env.local"),
         env_file_encoding="utf-8",
@@ -35,12 +13,98 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    @field_validator("allowed_origins", mode="before")
+    # Server
+    host: str = "0.0.0.0"
+    port: int = 8000
+    environment: str = "development"
+    log_level: str = "INFO"
+
+    # App
+    app_name: str = "Production AI Agent"
+    app_version: str = "1.0.0"
+
+    # Storage
+    redis_url: str = ""
+
+    # Security
+    agent_api_key: str = ""
+
+    # Runtime limits
+    rate_limit_per_minute: int = 10
+    monthly_budget_usd: float = 10.0
+    conversation_ttl_seconds: int = 86400
+    max_history_messages: int = 20
+
+    # LLM
+    openrouter_api_key: str = ""
+    openrouter_model: str = "google/gemini-2.5-flash-lite"
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+
+    # CORS
+    allowed_origins_raw: str = Field(
+        default="http://localhost:3000",
+        validation_alias="ALLOWED_ORIGINS",
+    )
+
+    @field_validator("environment", mode="before")
     @classmethod
-    def _split_origins(cls, value):
+    def normalize_environment(cls, value: str) -> str:
         if isinstance(value, str):
-            return [item.strip() for item in value.split(",") if item.strip()]
+            value = value.strip().lower()
+        if value not in {"development", "staging", "production"}:
+            raise ValueError("ENVIRONMENT must be one of: development, staging, production")
         return value
+
+    @field_validator("log_level", mode="before")
+    @classmethod
+    def normalize_log_level(cls, value: str) -> str:
+        if isinstance(value, str):
+            value = value.strip().upper()
+        if value not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
+            raise ValueError("LOG_LEVEL must be one of: DEBUG, INFO, WARNING, ERROR, CRITICAL")
+        return value
+
+    @model_validator(mode="after")
+    def validate_runtime_settings(self) -> "Settings":
+        if self.port <= 0:
+            raise ValueError("PORT must be greater than 0")
+        if self.rate_limit_per_minute <= 0:
+            raise ValueError("RATE_LIMIT_PER_MINUTE must be greater than 0")
+        if self.monthly_budget_usd < 0:
+            raise ValueError("MONTHLY_BUDGET_USD must be greater than or equal to 0")
+        if self.conversation_ttl_seconds <= 0:
+            raise ValueError("CONVERSATION_TTL_SECONDS must be greater than 0")
+        if self.max_history_messages < 2:
+            raise ValueError("MAX_HISTORY_MESSAGES must be at least 2")
+
+        if self.environment == "production":
+            if not self.agent_api_key:
+                raise ValueError("AGENT_API_KEY must be set in production")
+            if not self.redis_url:
+                raise ValueError("REDIS_URL must be set in production")
+            if not self.openrouter_api_key:
+                raise ValueError("OPENROUTER_API_KEY must be set in production")
+        return self
+
+    @property
+    def debug(self) -> bool:
+        return self.log_level == "DEBUG"
+
+    @property
+    def llm_model(self) -> str:
+        return self.openrouter_model
+
+    @property
+    def openai_api_key(self) -> str:
+        return self.openrouter_api_key
+
+    @property
+    def daily_budget_usd(self) -> float:
+        return self.monthly_budget_usd
+
+    @property
+    def allowed_origins(self) -> list[str]:
+        return [origin.strip() for origin in self.allowed_origins_raw.split(",") if origin.strip()]
 
 
 settings = Settings()
