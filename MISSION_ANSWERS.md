@@ -475,9 +475,9 @@ curl -X POST https://pleasing-freedom-production-ca8a.up.railway.app/ask \
 - LOG_LEVEL
 
 ## Screenshots
-- [Deployment dashboard](screenshots/dashboard.png)
-- [Service running](screenshots/running.png)
-- [Test results](screenshots/test.png)
+- [Deployment dashboard](extras/deployment.png)
+- [Service running](extras/service_running.png)
+- [Test results](extras/test.png)
 ```
 
 ##  Pre-Submission Checklist
